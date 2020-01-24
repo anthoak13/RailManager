@@ -1,27 +1,23 @@
 #! /usr/bin/env python3
+import matplotlib.pyplot as plt
+import networkx as nx
+import numpy as np
 
 components = {}
-
-currId = 0
+visited = []
+curCnt = 0
 nodeMap = {}
+labels = []
 
-def addStation(id, prevId, nextId):
+maxDepth = 100
+depth = 0
 
-    #if prevId in null skip it
-    if prevId is not None:
-        if id not in components.keys():
-            components[id] = {}
-        components[id][prevId] = -1
-
-    #if nextId is null skip it
-    if nextId is not None:
-        if id not in components.keys():
-            components[id] = {}
-        components[id][nextId] = 1
-
-    global currId
-    nodeMap[id] = currId
-    currId = currId + 1
+def addStation(id):
+    global curCnt
+    nodeMap[id] = curCnt
+    labels.append(id)
+    components[id] = {}
+    curCnt = curCnt + 1
     
     
 def addSwitch(id, prevId, nextId, nextId2):
@@ -33,60 +29,107 @@ def addSwitch(id, prevId, nextId, nextId2):
         components[id] = {}
     if prevId not in components.keys():
         components[prevId] = {}
+    if nextId not in components.keys():
+        components[nextId] = {}
+    if nextId2 not in components.keys():
+        components[nextId2] = {}
 
     components[id][nextId] = 1
     components[id][nextId2] = 1
     components[id][prevId] = -1
-    components[prevId][id] = 1
 
-    global currId
-    nodeMap[id] = currId
-    currId = currId + 1
+    # Only if it isn't filled already
+    if id not in components[prevId].keys():
+        components[prevId][id] = 1
+    if id not in components[nextId].keys():
+        components[nextId][id] = -1
+    if id not in components[nextId2].keys():
+        components[nextId2][id] = -1
 
+    global curCnt
+    nodeMap[id] = curCnt
+    labels.append(id)
+    curCnt = curCnt + 1
+
+def genAdj(startId):
+    global visited
+    visited = [0 for i in range(curCnt)]
+
+    adj = []
+    for i in range(curCnt):
+        adj.append([0 for i in range(curCnt)])
+
+    return examineNeighbor(startId, adj)
+
+# Recursive function, the default value searches all possible paths
+def examineNeighbor(rootId, adj, sign = 0):
+    # Check on global depth
+    """
+    global depth
+    global maxDepth
+    if depth > maxDepth:
+        return adj
+    depth = depth + 1
+    """
+
+    # Expose the list of visited nodes, and update
+    global visited
+    visited[nodeMap[rootId]] = 1
+    print("Visiting %s with sign %d" % (rootId, sign))
     
-addStation("A", None, None)
-addStation("B", None, None)
-addStation("C", None, None)
-print(components)
-addSwitch("S1", "A", "S2","S3")
-addSwitch("S2", "C", "S1","S3")
-addSwitch("S3", "B", "S1","S2")
+    #print("Looking from %s for sign %d" % (rootId, sign) )
 
-print(components)
+    # Look for the neighbors of opposite sign that haven't been visited
+    for neighbor in components[rootId].keys():
+        # If we found a valid neighbor travel there and look for its neighbors
+        if sign != components[rootId][neighbor] and visited[nodeMap[neighbor]] == 0:
+            adj[nodeMap[rootId]][nodeMap[neighbor]] = 1
+            adj = examineNeighbor(neighbor, adj, components[neighbor][rootId])
 
-
-# Generate one of the adjacancy matrices
-# Get a place to start
-
-print(nodeMap)    
-
-# Create blank adj map
-adj = []
-adjBack = []
-for i in range(currId):
-    adj.append([0 for i in range(currId)])
-    adjBack.append([0 for i in range(currId)])
-
-# Look at each node in the list
-for id in nodeMap.keys():
+    # Return the adj matrix
+    return adj
     
-    #Get all of its neighbors fill in matrix
-    for neighbor in components[id].keys():
-        if components[id][neighbor] == 1 :
-            adj[nodeMap[id]][nodeMap[neighbor]] = 1
-        else:
-            adjBack[nodeMap[id]][nodeMap[neighbor]] = 1
+def genLabelDict(labels):
+    retDict = {}
+    for i in range(len(labels)):
+        retDict[i] = labels[i]
+    return retDict
 
+def showGraph(adjMatrix, myLabels):
+    rows, cols = np.where(np.asarray(adjMatrix) == 1)
+    edges = zip(rows.tolist(), cols.tolist())
+    gr = nx.DiGraph()
+    gr.add_edges_from(edges)
+    nx.draw(gr, node_size=500, labels=genLabelDict(myLabels), with_labels=True)
+    plt.show()
 
+def showGraph(adjMatrix):
+    rows, cols = np.where(np.asarray(adjMatrix) == 1)
+    edges = zip(rows.tolist(), cols.tolist())
+    gr = nx.DiGraph()
+    gr.add_edges_from(edges)
+    nx.draw(gr, node_size=500)
+    plt.show()
 
-# Print the matrx
+addStation("A")
+addStation("B")
+addStation("C")
+addStation("D")
+
+addSwitch("S1", "A", "S2", "S3")
+addSwitch("S2", "B", "S1", "S4")
+addSwitch("S3", "S5", "S1", "S4")
+addSwitch("S4", "S5", "S2", "S3")
+addSwitch("S5", "S6", "S4", "S3")
+addSwitch("S6", "S5", "D", "C")
+
+print(components.keys())
+print(components)
+adj = genAdj("C")
+
 for row in adj:
     for val in row:
         print(val, end=",")
     print()
-
-print()
-for row in adjBack:
-    for val in row:
-        print(val, end=",")
-    print()
+print(genLabelDict(labels))
+showGraph(adj)
